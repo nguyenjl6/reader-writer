@@ -50,7 +50,7 @@ void my_sem_wait(struct cs_semaphore* cs) {
 void my_sem_post(struct cs_semaphore* cs) {
     sem_wait(&cs->mutex);
     cs->val = cs->val + 1;
-    if(cs->val = 1) {
+    if(cs->val == 1) {
         sem_post(&cs->wait);
     }
     sem_post(&cs->mutex);
