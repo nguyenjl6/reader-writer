@@ -2,22 +2,33 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
- 
+#include <unistd.h> 
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #define SIZE 5
 #define NUMB_THREADS 6
 #define PRODUCER_LOOPS 2
- 
+
+#define SHMSZ 300 
 typedef int buffer_t;
 buffer_t buffer[SIZE];
 int buffer_index;
-
+key_t keyBuffer;
+key_t keyFullSem;
+key_t keyEmptySem;
+int shmidOne;
+int shmidTwo;
+int shmidThree;
 struct cs_semaphore {
     int val;
     sem_t wait;
     sem_t mutex;
 };
 
+
 pthread_mutex_t buffer_mutex;
+pthread_mutex_t* buffer_mutex_pointer;
 /* initially buffer will be empty.  full_sem
    will be initialized to buffer SIZE, which means
    SIZE number of producer threads can write to it.
@@ -26,6 +37,8 @@ pthread_mutex_t buffer_mutex;
    thread posts to empty_sem */
 struct cs_semaphore full_sem;  
 struct cs_semaphore empty_sem; 
+struct cs_semaphore* full_sem_pointer;
+struct cs_semaphore* empty_sem_pointer;
 
 void my_sem_init(struct cs_semaphore* cs, int K) {
     cs->val = K;
@@ -119,13 +132,44 @@ void *consumer(void *thread_n) {
 }
  
 int main(int argc, int **argv) {
-    
+	pthread_mutex_init(&buffer_mutex, NULL);
+	buffer_mutex_pointer = &buffer_mutex;   
+	keyBuffer = 4910;
+	if ((shmidOne = shmget(keyBuffer, sizeof(buffer_mutex), IPC_CREAT | 0666)) < 0) {
+		perror("shmget");
+		exit(1);
+	}
+	if ((buffer_mutex_pointer = shmat(shmidOne, NULL, 0)) == (pthread_mutex_t*) -1) {
+		perror("shmat");
+		exit(1);
+	}
     buffer_index = 0;
- 
-    pthread_mutex_init(&buffer_mutex, NULL);
+
     my_sem_init(&full_sem, SIZE); 
     my_sem_init(&empty_sem, 0);
+	empty_sem_pointer = &empty_sem;
+	keyEmptySem = 4911;
+	if ((shmidTwo = shmget(keyEmptySem, sizeof(empty_sem), IPC_CREAT | 0666)) < 0) {
+		perror("shmget");
+		exit(1);
+	}
+	if ((empty_sem_pointer = shmat(shmidTwo, NULL, 0)) == (struct cs_semaphore*) -1) {
+		perror("shmat");
+		exit(1);
+	}
+	
 
+	full_sem_pointer = &full_sem;
+	keyFullSem = 4912;
+	if ((shmidThree = shmget(keyFullSem, sizeof(full_sem), IPC_CREAT | 0666)) < 0) {
+		perror("shmget");
+		exit(1);
+	}
+	if ((full_sem_pointer = shmat(shmidThree, NULL, 0)) == (struct cs_semaphore*) -1) {
+		perror("shmat");
+		exit(1);
+	}
+	
     pthread_t thread[NUMB_THREADS];
     int thread_numb[NUMB_THREADS];
     int i;
