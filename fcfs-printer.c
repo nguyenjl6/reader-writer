@@ -187,6 +187,17 @@ int main(int argc, int **argv) {
     head = NULL;
     struct node *n;
 
+	full_sem_pointer = &full_sem;
+	keyFullSem = 4912;
+	if ((shmidThree = shmget(keyFullSem, sizeof(full_sem), IPC_CREAT | 0666)) < 0) {
+		perror("shmget");
+		exit(1);
+	}
+	if ((full_sem_pointer = shmat(shmidThree, NULL, 0)) == (struct cs_semaphore*) -1) {
+		perror("shmat");
+		exit(1);
+	}
+	
     pthread_t thread[NUMB_THREADS];
     int thread_numb[NUMB_THREADS];
     int i;
