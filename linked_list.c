@@ -4,13 +4,13 @@
  
 struct node
 {
-    int data;
+    struct process_info data;
     struct node *next;
 }*head;
  
  
  
-void append(int num)
+void append(struct process_info num)
 {
     struct node *temp,*right;
     temp= (struct node *)malloc(sizeof(struct node));
@@ -36,7 +36,7 @@ int count()
     return c;
 }
  
-void add( int num )
+void add(struct process_info num)
 {
     struct node *temp;
     temp=(struct node *)malloc(sizeof(struct node));
@@ -52,7 +52,7 @@ void add( int num )
     head=temp;
     }
 }
-void addafter(int num, int loc)
+void addafter(struct process_info num, int loc)
 {
     int i;
     struct node *temp,*left,*right;
@@ -72,7 +72,7 @@ void addafter(int num, int loc)
  
  
  
-void insert(int num)
+void insert(struct process_info num)
 {
     int c=0;
     struct node *temp;
@@ -85,7 +85,7 @@ void insert(int num)
     {
     while(temp!=NULL)
     {
-        if(temp->data<num)
+        if(temp->data.size < num.size)
         c++;
         temp=temp->next;
     }
@@ -100,50 +100,58 @@ void insert(int num)
  
  
  
-int delete(int num)
+struct process_info delete()
 {
     struct node *temp, *prev;
-    temp=head;
-    while(temp!=NULL)
-    {
-    if(temp->data==num)
-    {
-        if(temp==head)
-        {
-        head=temp->next;
-        free(temp);
-        return 1;
-        }
-        else
-        {
-        prev->next=temp->next;
-        free(temp);
-        return 1;
-        }
-    }
-    else
-    {
-        prev=temp;
-        temp= temp->next;
-    }
-    }
-    return 0;
+    struct process_info process;
+    process.process_id = head->data.process_id;
+    process.size = head->data.size;
+    temp = head;
+    head=temp->next;
+    free(temp);
+    return process;
 }
  
  
-void  display(struct node *r)
-{
-    r=head;
-    if(r==NULL)
-    {
-    return;
-    }
-    while(r!=NULL)
-    {
-    printf("%d ",r->data);
-    r=r->next;
-    }
-    printf("\n");
-}
- 
+// void  display(struct node *r)
+// {
+//     r=head;
+//     if(r==NULL)
+//     {
+//     return;
+//     }
+//     while(r!=NULL)
+//     {
+//     printf("%d ",r->data.size);
+//     r=r->next;
+//     }
+//     printf("\n");
+// }
+
+// int main() {
+//     struct node *n;
+//     head=NULL;
+
+//     struct process_info test;
+//     test.process_id = 5;
+//     test.size = 1;
+    
+//     struct process_info test2;
+//     test2.process_id = 4;
+//     test2.size = 6;
+
+//     struct process_info test3;
+//     test2.process_id = 3;
+//     test3.size = 2;
+
+//     struct process_info test4;
+//     test2.process_id = 2;
+//     test4.size = 10;
+//     insert(test);
+//     insert(test2);
+//     insert(test3);
+//     insert(test4);
+
+//     display(n);
+// }
  

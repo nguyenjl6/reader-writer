@@ -7,15 +7,14 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include "linked_list.c"
-#define SIZE 5
-#define NUMB_THREADS 6
+#define SIZE 25
 #define PRODUCER_LOOPS 2
 
 #define SHMSZ 300 
 
 typedef struct process_info buffer_t;
-buffer_t buffer[SIZE];
-int buffer_index;
+// buffer_t buffer[SIZE];
+
 
 key_t keyBuffer;
 key_t keyFullSem;
@@ -79,35 +78,39 @@ void my_sem_destroy(struct cs_semaphore* cs) {
 }
  
 void insertbuffer(buffer_t value) {
-    if (buffer_index < SIZE) {
-        buffer[buffer_index++] = value;
-    } else {
+    if (count() < 25) {
+        insert(value);
+    }
+    else
+    {
         printf("Buffer overflow\n");
     }
 }
  
 buffer_t dequeuebuffer() {
-    if (buffer_index > 0) {
-        return buffer[--buffer_index]; // buffer_index-- would be error!
-    } else {
-        printf("Buffer underflow\n");
+    if (count() > 0)
+    {
+        return delete();
+    }
+    else
+    {
+        printf("List is empty\n");
     }
     struct process_info empty_info;
-    empty_info.process_id = 0;
-    empty_info.size = 0;
+    empty_info.process_id = -1;
+    empty_info.size = -1;
     return empty_info;
 }
 
 void *producer(void *thread_n) {
     int thread_numb = *(int *)thread_n;
-    buffer_t value;
     int i=0;
     while (i++ < PRODUCER_LOOPS) {
         sleep(rand() % 10);
 
         struct process_info test_info;
         test_info.process_id = 20;
-        test_info.size = 500;
+        test_info.size = 10;
         
         my_sem_wait(full_sem_pointer); // sem=0: wait. sem>0: go and decrement it
         /* possible race condition here. After this thread wakes up,
@@ -119,7 +122,7 @@ void *producer(void *thread_n) {
         insertbuffer(test_info);
         pthread_mutex_unlock(buffer_mutex_pointer);
         my_sem_post(empty_sem_pointer); // post (increment) emptybuffer semaphore
-        printf("Producer %d added %d to buffer\n", thread_numb, value);
+        printf("Producer %d added %d to buffer\n", thread_numb, test_info.size);
     }
     pthread_exit(0);
 }
@@ -136,12 +139,16 @@ void *consumer(void *thread_n) {
         value = dequeuebuffer(value);
         pthread_mutex_unlock(buffer_mutex_pointer);
         my_sem_post(full_sem_pointer); // post (increment) fullbuffer semaphore
-        printf("Consumer %d dequeue %d from buffer\n", thread_numb, value);
+        printf("Consumer %d dequeue %d from buffer\n", thread_numb, value.size);
    }
     pthread_exit(0);
 }
  
-int main(int argc, int **argv) {
+int main(int argc, char **argv) {
+
+    int processes = atoi(argv[1]);
+    int threads = atoi(argv[2]);
+
     // Initialize shared memory variables 
 	keyBuffer = 4910;
 	if ((shmidOne = shmget(keyBuffer, sizeof(pthread_mutex_t), IPC_CREAT | 0666)) < 0) {
@@ -154,8 +161,6 @@ int main(int argc, int **argv) {
 	}
 
     pthread_mutex_init(buffer_mutex_pointer, NULL); 
-
-    buffer_index = 0;
     
 	// empty_sem_pointer = &empty_sem;
 	keyEmptySem = 4911;
@@ -185,23 +190,11 @@ int main(int argc, int **argv) {
     my_sem_init(empty_sem_pointer, 0);
 
     head = NULL;
-    struct node *n;
 
-	full_sem_pointer = &full_sem;
-	keyFullSem = 4912;
-	if ((shmidThree = shmget(keyFullSem, sizeof(full_sem), IPC_CREAT | 0666)) < 0) {
-		perror("shmget");
-		exit(1);
-	}
-	if ((full_sem_pointer = shmat(shmidThree, NULL, 0)) == (struct cs_semaphore*) -1) {
-		perror("shmat");
-		exit(1);
-	}
-	
-    pthread_t thread[NUMB_THREADS];
-    int thread_numb[NUMB_THREADS];
+    pthread_t thread[threads];
+    int thread_numb[threads];
     int i;
-    for (i = 0; i < NUMB_THREADS; ) {
+    for (i = 0; i < threads; ) {
         thread_numb[i] = i;
         pthread_create(thread + i, // pthread_t *t
                        NULL, // const pthread_attr_t *attr
@@ -217,7 +210,7 @@ int main(int argc, int **argv) {
         i++;
     }
  
-    for (i = 0; i < NUMB_THREADS; i++)
+    for (i = 0; i < threads; i++)
         pthread_join(thread[i], NULL);
  
     pthread_mutex_destroy(buffer_mutex_pointer);
