@@ -6,10 +6,9 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/wait.h>
 #include "linked_list.c"
 #define SIZE 25
-#define PRODUCER_LOOPS 2
-
 #define SHMSZ 300 
 
 typedef struct process_info buffer_t;
@@ -19,10 +18,12 @@ typedef struct process_info buffer_t;
 key_t keyBuffer;
 key_t keyFullSem;
 key_t keyEmptySem;
+key_t keyLinkedList;
 
 int shmidOne;
 int shmidTwo;
 int shmidThree;
+int shmidFour;
 
 struct cs_semaphore {
     int val;
@@ -42,6 +43,8 @@ pthread_mutex_t *buffer_mutex_pointer;
 // struct cs_semaphore empty_sem; 
 struct cs_semaphore* full_sem_pointer;
 struct cs_semaphore* empty_sem_pointer;
+struct node *sharedLinkedList;
+
 
 void my_sem_init(struct cs_semaphore* cs, int K) {
     cs->val = K;
@@ -88,9 +91,13 @@ void insertbuffer(buffer_t value) {
 }
  
 buffer_t dequeuebuffer() {
+    struct process_info value;
     if (count() > 0)
     {
-        return delete();
+        value = delete();
+        // sleep((int) (value.size / 100));
+        
+        return value;
     }
     else
     {
@@ -102,16 +109,20 @@ buffer_t dequeuebuffer() {
     return empty_info;
 }
 
-void *producer(void *thread_n) {
-    int thread_numb = *(int *)thread_n;
+void *producer() {
+    //int thread_numb = *(int *)thread_n;
     int i=0;
-    while (i++ < PRODUCER_LOOPS) {
+    struct process_info test_info;
+    // int numLoops = (rand() % 25) + 1;
+    int numLoops = 3;
+    while (i++ < numLoops)
+    {
         sleep(rand() % 10);
 
-        struct process_info test_info;
-        test_info.process_id = 20;
-        test_info.size = 10;
-        
+        test_info.process_id = getpid();
+        srand(getpid());
+        test_info.size = (rand() % 900) + 100;
+
         my_sem_wait(full_sem_pointer); // sem=0: wait. sem>0: go and decrement it
         /* possible race condition here. After this thread wakes up,
            another thread could aqcuire mutex before this one, and add to list.
@@ -122,24 +133,24 @@ void *producer(void *thread_n) {
         insertbuffer(test_info);
         pthread_mutex_unlock(buffer_mutex_pointer);
         my_sem_post(empty_sem_pointer); // post (increment) emptybuffer semaphore
-        printf("Producer %d added %d to buffer\n", thread_numb, test_info.size);
+        //printf("Producer <%d> added <%d> to buffer\n", thread_numb + 1, test_info.size);
+        printf("Producer <%d> added <%d> to buffer\n", getpid(), test_info.size);
+
     }
-    pthread_exit(0);
 }
- 
+
 void *consumer(void *thread_n) {
     int thread_numb = *(int *)thread_n;
     buffer_t value;
-    int i=0;
-    while (i++ < PRODUCER_LOOPS) {
+    while (1) {
         my_sem_wait(empty_sem_pointer);
         /* there could be race condition here, that could cause
            buffer underflow error */
         pthread_mutex_lock(buffer_mutex_pointer);
-        value = dequeuebuffer(value);
+        value = dequeuebuffer();
         pthread_mutex_unlock(buffer_mutex_pointer);
         my_sem_post(full_sem_pointer); // post (increment) fullbuffer semaphore
-        printf("Consumer %d dequeue %d from buffer\n", thread_numb, value.size);
+        printf("Consumer <%d> dequeue <%d, %d> from buffer\n", thread_numb + 1, value.process_id, value.size);
    }
     pthread_exit(0);
 }
@@ -189,26 +200,47 @@ int main(int argc, char **argv) {
     my_sem_init(full_sem_pointer, SIZE); 
     my_sem_init(empty_sem_pointer, 0);
 
-    head = NULL;
+
+
+	keyLinkedList = 4913;
+	if ((shmidFour = shmget(keyLinkedList, sizeof(struct node)*25, IPC_CREAT | 0666)) < 0) {
+		perror("shmget");
+		exit(1);
+	}
+
+    if ((sharedLinkedList = shmat(shmidFour, NULL, 0)) == (struct node *)-1)
+    {
+        perror("shmat");
+		exit(1);
+    }
+
+
+    //sharedLinkedList = NULL;
+    //sharedLinkedList = head;
+    //head = NULL;
+    //head = sharedLinkedList;
 
     pthread_t thread[threads];
     int thread_numb[threads];
     int i;
-    for (i = 0; i < threads; ) {
-        thread_numb[i] = i;
-        pthread_create(thread + i, // pthread_t *t
-                       NULL, // const pthread_attr_t *attr
-                       producer, // void *(*start_routine) (void *)
-                       thread_numb + i);  // void *arg
-        i++;
-        thread_numb[i] = i;
-        // playing a bit with thread and thread_numb pointers...
-        pthread_create(&thread[i], // pthread_t *t
-                       NULL, // const pthread_attr_t *attr
-                       consumer, // void *(*start_routine) (void *)
-                       &thread_numb[i]);  // void *arg
-        i++;
-    }
+
+
+    // for(int j = 0; j < processes; j++) {
+         if (fork() == 0) {
+             producer();
+             exit(0);
+         }
+        else {
+        wait(NULL);
+        }
+    // }
+
+
+        for (i = 0; i < threads; i++)
+        {
+            thread_numb[i] = i;
+            pthread_create(&thread[i], NULL, consumer, &thread_numb[i]);
+        }
  
     for (i = 0; i < threads; i++)
         pthread_join(thread[i], NULL);
