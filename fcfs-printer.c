@@ -11,9 +11,7 @@
 #define SIZE 25
 #define SHMSZ 300 
 
-typedef struct process_info buffer_t;
-// buffer_t buffer[SIZE];
-
+typedef struct node buffer_t;
 
 key_t keyBuffer;
 key_t keyFullSem;
@@ -31,20 +29,12 @@ struct cs_semaphore {
     sem_t mutex;
 };
 
-// pthread_mutex_t buffer_mutex;
 pthread_mutex_t *buffer_mutex_pointer;
-/* initially buffer will be empty.  full_sem
-   will be initialized to buffer SIZE, which means
-   SIZE number of producer threads can write to it.
-   And empty_sem will be initialized to 0, so no
-   consumer can read from buffer until a producer
-   thread posts to empty_sem */
-// struct cs_semaphore full_sem;  
-// struct cs_semaphore empty_sem; 
+
 struct cs_semaphore* full_sem_pointer;
 struct cs_semaphore* empty_sem_pointer;
 struct node *sharedLinkedList;
-
+struct node *head;
 
 void my_sem_init(struct cs_semaphore* cs, int K) {
     cs->val = K;
@@ -81,38 +71,38 @@ void my_sem_destroy(struct cs_semaphore* cs) {
 }
  
 void insertbuffer(buffer_t value) {
-    if (count() < 25) {
+    if (count() <= 25) {
         insert(value);
+        display(head);
     }
     else
     {
+        printf("%d ", count());
         printf("Buffer overflow\n");
     }
 }
  
 buffer_t dequeuebuffer() {
-    struct process_info value;
+    struct node value;
     if (count() > 0)
     {
-        value = delete();
-        // sleep((int) (value.size / 100));
-        
+        value = delete();        
         return value;
     }
     else
     {
         printf("List is empty\n");
     }
-    struct process_info empty_info;
+    struct node empty_info;
     empty_info.process_id = -1;
-    empty_info.size = -1;
+    empty_info.job_size = -1;
     return empty_info;
 }
 
 void *producer() {
     //int thread_numb = *(int *)thread_n;
     int i=0;
-    struct process_info test_info;
+    struct node test_info;
     // int numLoops = (rand() % 25) + 1;
     int numLoops = 3;
     while (i++ < numLoops)
@@ -121,20 +111,15 @@ void *producer() {
 
         test_info.process_id = getpid();
         srand(getpid());
-        test_info.size = (rand() % 900) + 100;
+        test_info.job_size = (rand() % 900) + 100;
 
-        my_sem_wait(full_sem_pointer); // sem=0: wait. sem>0: go and decrement it
-        /* possible race condition here. After this thread wakes up,
-           another thread could aqcuire mutex before this one, and add to list.
-           Then the list would be full again
-           and when this thread tried to insert to buffer there would be
-           a buffer overflow error */
-        pthread_mutex_lock(buffer_mutex_pointer); /* protecting critical section */
+        my_sem_wait(full_sem_pointer); 
+        pthread_mutex_lock(buffer_mutex_pointer); 
         insertbuffer(test_info);
         pthread_mutex_unlock(buffer_mutex_pointer);
-        my_sem_post(empty_sem_pointer); // post (increment) emptybuffer semaphore
+        my_sem_post(empty_sem_pointer); 
         //printf("Producer <%d> added <%d> to buffer\n", thread_numb + 1, test_info.size);
-        printf("Producer <%d> added <%d> to buffer\n", getpid(), test_info.size);
+        printf("Producer <%d> added <%d> to buffer\n", getpid(), test_info.job_size);
 
     }
 }
@@ -144,15 +129,12 @@ void *consumer(void *thread_n) {
     buffer_t value;
     while (1) {
         my_sem_wait(empty_sem_pointer);
-        /* there could be race condition here, that could cause
-           buffer underflow error */
         pthread_mutex_lock(buffer_mutex_pointer);
-        value = dequeuebuffer();
+        value = dequeuebuffer(); // TODO
         pthread_mutex_unlock(buffer_mutex_pointer);
-        my_sem_post(full_sem_pointer); // post (increment) fullbuffer semaphore
-        printf("Consumer <%d> dequeue <%d, %d> from buffer\n", thread_numb + 1, value.process_id, value.size);
+        my_sem_post(full_sem_pointer); 
+        printf("Consumer <%d> dequeue <%d, %d> from buffer\n", thread_numb + 1, value.process_id, value.job_size);
    }
-    pthread_exit(0);
 }
  
 int main(int argc, char **argv) {
@@ -173,7 +155,6 @@ int main(int argc, char **argv) {
 
     pthread_mutex_init(buffer_mutex_pointer, NULL); 
     
-	// empty_sem_pointer = &empty_sem;
 	keyEmptySem = 4911;
 	if ((shmidTwo = shmget(keyEmptySem, sizeof(struct cs_semaphore), IPC_CREAT | 0666)) < 0) {
 		perror("shmget");
@@ -184,8 +165,6 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 	
-
-	// full_sem_pointer = &full_sem;
 	keyFullSem = 4912;
 	if ((shmidThree = shmget(keyFullSem, sizeof(struct cs_semaphore), IPC_CREAT | 0666)) < 0) {
 		perror("shmget");
@@ -201,12 +180,17 @@ int main(int argc, char **argv) {
     my_sem_init(empty_sem_pointer, 0);
 
 
-
 	keyLinkedList = 4913;
 	if ((shmidFour = shmget(keyLinkedList, sizeof(struct node)*25, IPC_CREAT | 0666)) < 0) {
 		perror("shmget");
 		exit(1);
 	}
+
+    struct node* initial_element;
+    initial_element=(struct node *)malloc(sizeof(struct node));
+    initial_element->job_size = -1;
+    initial_element->process_id = -1;
+    initial_element->next = NULL;
 
     if ((sharedLinkedList = shmat(shmidFour, NULL, 0)) == (struct node *)-1)
     {
@@ -214,34 +198,50 @@ int main(int argc, char **argv) {
 		exit(1);
     }
 
+    sharedLinkedList = initial_element;
 
-    //sharedLinkedList = NULL;
-    //sharedLinkedList = head;
-    //head = NULL;
-    //head = sharedLinkedList;
 
     pthread_t thread[threads];
     int thread_numb[threads];
     int i;
+    int flag = 0;
+    
+    head = sharedLinkedList;
+    for (i = 0; i < 24; i++)
+    {
+        struct node *temp;
+        temp=(struct node *)malloc(sizeof(struct node));
 
+        temp->job_size = -1;
+        temp->process_id = -1;
+        temp->next = NULL;
+        sharedLinkedList->next = temp;
+        sharedLinkedList = temp;
+    }
 
-    // for(int j = 0; j < processes; j++) {
+    for(i = 0; i < processes + 1; i++) {
          if (fork() == 0) {
              producer();
              exit(0);
          }
-        else {
+    }
+
+    for (i = 0; i < processes + 1; i++) {
         wait(NULL);
-        }
-    // }
+        flag = 1;
+    }
 
+    for (i = 0; i < threads; i++)
+    {
+        thread_numb[i] = i;
+        pthread_create(&thread[i], NULL, consumer, &thread_numb[i]);
+    }
 
-        for (i = 0; i < threads; i++)
-        {
-            thread_numb[i] = i;
-            pthread_create(&thread[i], NULL, consumer, &thread_numb[i]);
-        }
- 
+    while(!(flag && (empty_sem_pointer->val == 0)));
+
+    for (i = 0; i < threads; i++)
+        pthread_cancel(thread_numb[i]);
+
     for (i = 0; i < threads; i++)
         pthread_join(thread[i], NULL);
  

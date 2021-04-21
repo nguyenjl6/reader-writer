@@ -1,20 +1,21 @@
 #include<stdio.h>
 #include<stdlib.h>
-#include "process_info.h"
  
 struct node
 {
-    struct process_info data;
+    int job_size;
+    int process_id;
     struct node *next;
 }*head;
  
  
  
-void append(struct process_info num)
+void append(struct node num)
 {
     struct node *temp,*right;
     temp= (struct node *)malloc(sizeof(struct node));
-    temp->data=num;
+    temp->job_size=num.job_size;
+    temp->process_id = num.process_id;
     right=(struct node *)head;
     while(right->next != NULL)
     right=right->next;
@@ -36,12 +37,13 @@ int count()
     return c;
 }
  
-void add(struct process_info num)
+void add(struct node num)
 {
     struct node *temp;
     temp=(struct node *)malloc(sizeof(struct node));
-    temp->data=num;
-    if (head== NULL)
+    temp->job_size=num.job_size;
+    temp->process_id = num.process_id;
+    if (head == NULL)
     {
     head=temp;
     head->next=NULL;
@@ -52,7 +54,7 @@ void add(struct process_info num)
     head=temp;
     }
 }
-void addafter(struct process_info num, int loc)
+void addafter(struct node num, int loc)
 {
     int i;
     struct node *temp,*left,*right;
@@ -63,7 +65,8 @@ void addafter(struct process_info num, int loc)
     right=right->next;
     }
     temp=(struct node *)malloc(sizeof(struct node));
-    temp->data=num;
+    temp->job_size=num.job_size;
+    temp->process_id = num.process_id;
     left->next=temp;
     left=temp;
     left->next=right;
@@ -72,7 +75,7 @@ void addafter(struct process_info num, int loc)
  
  
  
-void insert(struct process_info num)
+void insert(struct node num)
 {
     int c=0;
     struct node *temp;
@@ -85,7 +88,7 @@ void insert(struct process_info num)
     {
     while(temp!=NULL)
     {
-        if(temp->data.size < num.size)
+        if(temp->job_size < num.job_size)
         c++;
         temp=temp->next;
     }
@@ -96,16 +99,29 @@ void insert(struct process_info num)
     else
         append(num);
     }
+
+    // struct node *findNode = head;
+    // if(findNode->job_size == -1) {
+    //     findNode->job_size = num.job_size;
+    //     findNode->process_id = num.process_id;
+    // } else {
+    //     while(findNode != NULL) {
+    //         if(findNode->job_size < num.job_size) {
+    //             findNode->job_size = num.job_size;
+    //             findNode->process_id = num.process_id;
+    //             return;
+    //         }
+    //         findNode = findNode->next;
+    //     }
+    // }
 }
- 
- 
- 
-struct process_info delete()
+
+struct node delete()
 {
     struct node *temp, *prev;
-    struct process_info process;
-    process.process_id = head->data.process_id;
-    process.size = head->data.size;
+    struct node process;
+    process.process_id = head->process_id;
+    process.job_size = head->job_size;
     temp = head;
     head=temp->next;
     free(temp);
@@ -113,40 +129,40 @@ struct process_info delete()
 }
  
  
-// void  display(struct node *r)
-// {
-//     r=head;
-//     if(r==NULL)
-//     {
-//     return;
-//     }
-//     while(r!=NULL)
-//     {
-//     printf("%d ",r->data.size);
-//     r=r->next;
-//     }
-//     printf("\n");
-// }
+void  display(struct node *r)
+{
+    r=head;
+    if(r==NULL)
+    {
+    return;
+    }
+    while(r!=NULL)
+    {
+    printf("%d ",r->job_size);
+    r=r->next;
+    }
+    printf("\n");
+}
 
 // int main() {
 //     struct node *n;
 //     head=NULL;
 
-//     struct process_info test;
+//     struct node test;
 //     test.process_id = 5;
-//     test.size = 1;
+//     test.job_size = 1;
     
-//     struct process_info test2;
+//     struct node test2;
 //     test2.process_id = 4;
-//     test2.size = 6;
+//     test2.job_size = 6;
 
-//     struct process_info test3;
+//     struct node test3;
 //     test2.process_id = 3;
-//     test3.size = 2;
+//     test3.job_size = 2;
 
-//     struct process_info test4;
+//     struct node test4;
 //     test2.process_id = 2;
-//     test4.size = 10;
+//     test4.job_size = 10;
 //     insert(test);
 //     insert(test2);
 //     insert(test3);
